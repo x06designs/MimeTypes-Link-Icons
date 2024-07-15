@@ -1,13 +1,13 @@
 <?php
 /**
  * @package MimeTypeLinkImages
- * @version 3.2.12
+ * @version 3.2.19
  */
 /*
 Plugin Name: MimeTypes Link Icons
 Plugin URI: http://blog.eagerterrier.co.uk/2010/10/holy-cow-ive-gone-and-made-a-mime-type-wordpress-plugin/
 Description: This will add file type icons next to links automatically. Change options in the <a href="options-general.php?page=mimetypes-link-icons">settings page</a>
-Version: 3.2.12
+Version: 3.2.19
 Author: Toby Cox, Juliette Reinders Folmer
 Author URI: https://github.com/eagerterrier/MimeTypes-Link-Icons
 Author: Toby Cox
@@ -18,6 +18,8 @@ Contributor: Keith Parker
 Contributor URI: http://infas.net/
 Contributor: Birgir Erlendsson
 Contributor URI: http://wordpress.stackexchange.com/users/26350/birgire
+Contributor: x06designs
+Contributor URI: https://github.com/x06designs
 Text Domain: mimetypes-link-icons
 Domain Path: /languages
 */
@@ -61,7 +63,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 if ( ! class_exists( 'Mime_Types_Link_Icons' ) ) {
 	/**
 	 * @package WordPress\Plugins\MimeTypes Link Icons
-	 * @version 3.2.12
+	 * @version 3.2.19
 	 * @link http://wordpress.org/plugins/mimetypes-link-icons/ MimeTypes Link Icons WordPress plugin
 	 * @link https://github.com/eagerterrier/MimeTypes-Link-Icons GitHub development of MimeTypes Link Icons WordPress plugin
 	 *
@@ -77,7 +79,7 @@ if ( ! class_exists( 'Mime_Types_Link_Icons' ) ) {
 		 * @const string	Plugin version number
 		 * @usedby upgrade_options(), __construct()
 		 */
-		const VERSION = '3.2.12';
+		const VERSION = '3.2.19';
 
 		/**
 		 * @const string	Version in which the front-end styles where last changed
@@ -209,7 +211,7 @@ if ( ! class_exists( 'Mime_Types_Link_Icons' ) ) {
 			'3g2', '3gp',
 			'ai', 'air', 'asf', 'avi',
 			'bib',
-			'cls', 'csv',
+			'capx', 'cls', 'csv',
 			'deb', 'djvu', 'dmg', 'doc', 'docx', 'dwf', 'dwg',
 			'eps', 'epub', 'exe',
 			'f', 'f77', 'f90', 'flac', 'flv',
@@ -220,7 +222,7 @@ if ( ! class_exists( 'Mime_Types_Link_Icons' ) ) {
 			'log',
 			'm4a', 'm4v', 'midi', 'mkv', 'mov', 'mp3', 'mp4', 'mpeg', 'mpg', 'msi', 'msix',
 			'odp', 'ods', 'odt', 'oga', 'ogg', 'ogv',
-			'pdf', 'png', 'pps', 'ppsx', 'ppt', 'pptm', 'pptx', 'psd', 'pub', 'py',
+			'pages', 'pdf', 'png', 'pps', 'ppsx', 'ppt', 'pptm', 'pptx', 'psd', 'pub', 'py',
 			'qt',
 			'ra', 'ram', 'rar', 'rm', 'rpm', 'rtf', 'rv',
 			'skp', 'spx', 'sql', 'sty',
@@ -257,6 +259,7 @@ if ( ! class_exists( 'Mime_Types_Link_Icons' ) ) {
 			'enable_hidden_class'	=> true,
 			'hidden_classname'		=> array( 'wp-caption', ),
 			'version'				=> null,
+			'show_file_size_over'	=> 0,
 			//'upgrading'			=> false, // will never change, not saved to db, only used to distinguish a call from the upgrade method
 		);
 
@@ -706,7 +709,7 @@ if ( ! class_exists( 'Mime_Types_Link_Icons' ) ) {
 			$this->active_mimetypes = preg_grep( '`^[a-z0-9]{2,8}$`', $this->active_mimetypes );
 
 			// Don't do anything if no active_mimetypes or if we're not on the frontend
-			if ( false === is_admin() && array() !== $this->active_mimetypes ) {
+			if ( false === is_admin() && !wp_is_json_request() && array() !== $this->active_mimetypes ) {
 				/* Register the_content filter */
 				if ( false === $this->settings['enable_async'] || true === $this->settings['show_file_size'] ) {
 					add_filter( 'the_content', array( $this, 'mimetype_to_icon' ), 15 );
@@ -1307,7 +1310,6 @@ if ( ! class_exists( 'Mime_Types_Link_Icons' ) ) {
 			if ( true === $this->settings['show_file_size'] && ( is_array( $this->filesize_styles ) && array() !== $this->filesize_styles ) ) {
 				$styles  = array_unique( $this->filesize_styles );
 				$styles  = implode( '', $styles );
-				//$content = $content . '<style type="text/css">' . $styles . '</style>';
 				echo '<style type="text/css">' . $styles . '</style>';
 				unset( $styles );
 			}
@@ -1701,7 +1703,7 @@ if ( ! class_exists( 'Mime_Types_Link_Icons' ) ) {
 				$count = count( $this->byte_suffixes );
 			}
 
-			if ( is_int( $filesize ) && 0 < $filesize ) {
+			if ( is_int( $filesize ) && ( $this->settings['show_file_size_over'] * 1024 ) < $filesize ) {
 				// Get the figure to use in the string
 				for ( $i = 0; ( $i < $count && 1024 <= $filesize ); $i++ ) {
 					$filesize = $filesize / 1024;
@@ -1797,6 +1799,24 @@ if ( ! class_exists( 'Mime_Types_Link_Icons' ) ) {
 						else if ( function_exists( 'add_settings_error' ) ) {
 							// Edge case: should never happen
 							add_settings_error( self::SETTINGS_OPTION, $key, esc_html__( 'Invalid image placement received', 'mimetypes-link-icons' ) . ', ' . esc_html__( 'the setting has not been changed.', 'mimetypes-link-icons' ), 'error' );
+						}
+						break;
+
+
+					case 'show_file_size_over':
+						if ( isset( $received[ $key ] ) && '' !== trim( $received[ $key ] ) ) {
+							$int = $this->validate_int( $received[ $key ] );
+							if ( false !== $int ) {
+								$clean[ $key ] = $int;
+							}
+							else if ( function_exists( 'add_settings_error' ) ) {
+								add_settings_error( self::SETTINGS_OPTION, $key, esc_html__( 'Invalid show file size over received', 'mimetypes-link-icons' ) . ', ' . esc_html__( 'the setting has not been changed.', 'mimetypes-link-icons' ), 'error' );
+							}
+							unset( $int );
+						}
+						else {
+							// Empty field, let's assume the user meant no decimals
+							$clean[ $key ] = 0;
 						}
 						break;
 
@@ -2091,6 +2111,12 @@ if ( ! class_exists( 'Mime_Types_Link_Icons' ) ) {
 							<label for="precision">' . esc_html__( 'File size rounding precision:', 'mimetypes-link-icons' ) . '
 							<input type="text" name="' . esc_attr( self::SETTINGS_OPTION . '[precision]' ) . '" id="precision" value="' . esc_attr( $this->settings['precision'] ) . '" /> ' . esc_html__( 'decimals', 'mimetypes-link-icons' ) . '</label><br />
 							<small><em>' . esc_html__( 'sizes less than 1kB will always have 0 decimals', 'mimetypes-link-icons' ) . '</em></small>
+						</td>
+					</tr>
+					<tr>
+						<td colspan="2">
+							<label for="show_file_size_over">' . esc_html__( 'Only show file sizes for files over :', 'mimetypes-link-icons' ) . '
+							<input type="text" name="' . esc_attr( self::SETTINGS_OPTION . '[show_file_size_over]' ) . '" id="show_file_size_over" value="' . esc_attr( $this->settings['show_file_size_over'] ) . '" /> ' . esc_html__( 'Kb', 'mimetypes-link-icons' ) . '</label><br />
 						</td>
 					</tr>
 					<tr>
